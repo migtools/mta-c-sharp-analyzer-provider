@@ -8,7 +8,7 @@ RUN --mount=type=cache,id=cargohome,uid=1001,gid=0,mode=0777,target=/root/.cargo
 
 FROM registry.redhat.io/ubi9/ubi:latest
 
-RUN dnf install -y dotnet-sdk-8.0 dotnet-runtime-8.0 tar gzip findutils && \
+RUN dnf install -y dotnet-sdk-9.0 dotnet-runtime-9.0 tar gzip findutils && \
     dnf clean all && \
     rm -rf /var/cache/dnf
 RUN dotnet tool install --tool-path=/usr/local/bin Paket
