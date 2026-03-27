@@ -1,4 +1,4 @@
-FROM registry.redhat.io/ubi9/ubi:latest as builder
+FROM registry.redhat.io/ubi10/ubi:latest as builder
 COPY --chown=1001:0 . /workspace
 RUN dnf install -y rust-toolset unzip
 
@@ -6,7 +6,7 @@ WORKDIR /workspace
 
 RUN --mount=type=cache,id=cargohome,uid=1001,gid=0,mode=0777,target=/root/.cargo cargo build --release
 
-FROM registry.redhat.io/ubi9/ubi:latest
+FROM registry.redhat.io/ubi10/ubi:latest
 
 RUN dnf install -y dotnet-sdk-9.0 dotnet-runtime-9.0 tar gzip findutils && \
     dnf clean all && \
