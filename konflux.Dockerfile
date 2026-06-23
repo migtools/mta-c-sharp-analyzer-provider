@@ -1,33 +1,43 @@
 FROM registry.redhat.io/ubi10/ubi:latest as builder
-COPY --chown=1001:0 . /workspace
-RUN dnf install -y rust-toolset unzip
 
-WORKDIR /workspace
+RUN dnf install -y dotnet-sdk-9.0 && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
 
-RUN --mount=type=cache,id=cargohome,uid=1001,gid=0,mode=0777,target=/root/.cargo cargo build --release
+WORKDIR /build
+COPY src/CSharpProvider.csproj .
+RUN dotnet restore
+
+COPY src/ .
+RUN dotnet publish -c Release -o /app
 
 FROM registry.redhat.io/ubi10/ubi:latest
 
-RUN dnf install -y dotnet-sdk-9.0 dotnet-runtime-9.0 tar gzip findutils && \
+# Install .NET SDK (required at runtime for dotnet restore on analyzed projects)
+RUN dnf install -y dotnet-sdk-9.0 && \
     dnf clean all && \
     rm -rf /var/cache/dnf
-RUN dotnet tool install --tool-path=/usr/local/bin Paket
-RUN dotnet tool install --tool-path=/usr/local/bin ilspycmd --version 9.1.0.7988
-RUN chgrp -R 0 /home && chmod -R g=u /home
+
+# Create directories with proper permissions for OpenShift compatibility
+# Group 0 (root group) needs rwx for OpenShift arbitrary UIDs
+RUN mkdir -p /analyzer-lsp /projects && \
+    chgrp -R 0 /home /analyzer-lsp /projects && \
+    chmod -R g=u /home /analyzer-lsp /projects
+
 USER 1001
 
 ENV HOME=/home
-ENV RUST_LOG=INFO,c_sharp_analyzer_provider_cli=DEBUG,
-
-COPY --from=builder /workspace/target/release/c-sharp-analyzer-provider-cli /usr/local/bin/c-sharp-provider
-COPY --from=builder --chmod=0755 /workspace/scripts/dotnet-install.sh /usr/local/bin/scripts/dotnet-install.sh
-COPY --from=builder --chmod=0755 /workspace/scripts/dotnet-install.ps1 /usr/local/bin/scripts/dotnet-install.ps1
-COPY --from=builder /workspace/LICENSE /licenses/
+ENV DOTNET_ROOT=/usr/lib64/dotnet
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 WORKDIR /analyzer-lsp
-RUN chgrp -R 0 /analyzer-lsp && chmod -R g=u /analyzer-lsp
 
-ENTRYPOINT ["/usr/local/bin/c-sharp-provider"]
+# Copy published application
+COPY --from=builder /app /usr/local/lib/csharp-provider
+COPY LICENSE /licenses/
+
+ENTRYPOINT ["dotnet", "/usr/local/lib/csharp-provider/CSharpProvider.dll"]
 CMD ["--name", "c-sharp", "--port", "14651"]
 
 LABEL \
